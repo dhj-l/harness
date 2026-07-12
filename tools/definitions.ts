@@ -132,6 +132,73 @@ export const tools = [
       },
     },
   },
+  /**
+   * 写入记忆工具。
+   * 模型调用此工具将一条键值对记忆持久化到项目根目录的 memory.json。
+   */
+  {
+    type: "function" as const,
+    function: {
+      name: "write_memory",
+      description:
+        "写入一条项目级记忆（键值对），存储在项目根目录的 memory.json 中。可用于记住用户偏好、项目约定、中间结论等跨会话信息。",
+      parameters: {
+        type: "object" as const,
+        properties: {
+          key: {
+            type: "string" as const,
+            description:
+              "记忆的键名，应具有描述性，例如 '用户语言偏好'、'项目技术栈'",
+          },
+          value: {
+            type: "string" as const,
+            description: "记忆的值，存储与该键关联的文本内容",
+          },
+        },
+        // key 和 value 均为必填参数
+        required: ["key", "value"],
+      },
+    },
+  },
+  /**
+   * 读取记忆工具。
+   * 模型调用此工具根据键名查找之前保存的记忆。
+   */
+  {
+    type: "function" as const,
+    function: {
+      name: "read_memory",
+      description:
+        "当遇到了信息不完全的情况，可以根据键名读取一条项目级记忆。如果键不存在，会返回友好的提示信息。",
+      parameters: {
+        type: "object" as const,
+        properties: {
+          key: {
+            type: "string" as const,
+            description: "要读取的记忆键名",
+          },
+        },
+        required: ["key"],
+      },
+    },
+  },
+  /**
+   * 列出记忆工具。
+   * 模型调用此工具查看所有已保存的项目级记忆概览。
+   */
+  {
+    type: "function" as const,
+    function: {
+      name: "list_memories",
+      description:
+        "当你需要查看所有已保存的记忆时，调用此工具。列出所有项目级记忆。无参数，返回每行一条 'key: value' 格式的文本列表。",
+      parameters: {
+        type: "object" as const,
+        // 无参数，但 OpenAI Function Calling 要求 parameters 字段存在，故保留空对象
+        properties: {},
+      },
+    },
+  },
 ] as const;
 
 /**

@@ -17,9 +17,10 @@ export { load_skills, initSkills, getSkillsPrompt } from "./tool/load_skills";
 export { spawn_subagent } from "./tool/sub_agent";
 export { summarize_subAgent } from "./tool/summarize_subAgent";
 export { ask_user } from "./tool/ask_user";
+export { write_memory, read_memory, list_memories } from "./tool/memory";
 export { saveMessagesSnapshot } from "./snapshot";
 
-// ---- 内部导入 ----
+// ---- 内部导入（仅供本模块调度使用，不对外暴露） ----
 import { tools, subagent_tools_blacklist, main_tools_blacklist } from "./definitions";
 import { saveMessagesSnapshot } from "./snapshot";
 import { get_weather } from "./tool/get_weather";
@@ -28,27 +29,47 @@ import { load_skills } from "./tool/load_skills";
 import { spawn_subagent } from "./tool/sub_agent";
 import { summarize_subAgent } from "./tool/summarize_subAgent";
 import { ask_user } from "./tool/ask_user";
+import { write_memory, read_memory, list_memories } from "./tool/memory";
 import type {
   ChatCompletionMessageParam,
   ChatCompletionMessageFunctionToolCall,
 } from "openai/resources/chat/completions/completions";
 
 // ---- 工具函数签名 ----
-/** 工具函数签名：接收一个任意参数的 JSON 对象，返回任意值 */
+/**
+ * 工具函数签名。
+ * 所有工具函数接受一个解构参数的 JSON 对象，返回任意值（通常是字符串）。
+ * 字符串返回值会被作为 tool 角色的 content 注入回对话，供模型继续推理。
+ */
 type ToolFn = (args: any) => any;
 
 /**
  * 工具全量映射表。
  * 将工具函数名称（与 OpenAI Function Calling 的 name 一致）映射到对应的实现函数。
  * dispatchToolCall 通过此表完成名称 → 函数的路由。
+ *
+ * 每个键是 definitions.ts 中定义的 function.name，
+ * 值是 tools/tool/ 目录下对应文件中导出的函数引用。
+ *
+ * 新增工具时需要在此注册，否则 dispatchToolCall 会抛出 "工具不存在" 错误。
  */
 export const switchTools: Record<string, ToolFn> = {
-  get_weather,
-  read_file,
-  load_skills,
-  spawn_subagent,
-  summarize_subAgent,
-  ask_user,
+  // ---- 基础工具 ----
+  get_weather,        // 查询天气
+  read_file,          // 读取文件内容
+  load_skills,        // 加载技能定义
+
+  // ---- 子代理相关 ----
+  spawn_subagent,     // 启动子代理处理复杂任务
+  summarize_subAgent, // 【子代理专用】返回最终答案的唯一出口
+
+  // ---- 交互工具 ----
+  ask_user,           // 向用户提问以获取更多信息
+
+  // ---- 记忆系统（项目级持久化存储） ----
+  write_memory,       // 写入键值对记忆到 memory.json
+  read_memory,        // 根据键名读取记忆
+  list_memories,      // 列出所有已保存的记忆
 };
 
 /**
