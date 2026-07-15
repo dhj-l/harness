@@ -25,3 +25,4 @@ pnpm-debug.log*
 # builded file
 auto-imports.d.ts
 components.d.ts
+.env

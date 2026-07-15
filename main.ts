@@ -25,7 +25,7 @@ import {
 // ---- OpenAI 客户端 ----
 const openai = new OpenAI({
   baseURL: "https://api.deepseek.com",
-  apiKey: "sk-62b974098ae64b76b11a3cc3f7e59fd6",
+  apiKey: process.env.DEEPSEEK_API_KEY,
 });
 
 // ---- 技能配置 ----
@@ -62,7 +62,9 @@ initSkills(skills);
  *
  * @param messages - 对话消息列表（会被修改）
  */
-async function agent_loop(messages: ChatCompletionMessageParam[]): Promise<void> {
+async function agent_loop(
+  messages: ChatCompletionMessageParam[],
+): Promise<void> {
   while (true) {
     // 调用模型
     const res = await openai.chat.completions.create({
