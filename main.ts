@@ -21,6 +21,7 @@ import {
   getSkillsPrompt,
   saveMessagesSnapshot,
 } from "./tools";
+import { get_system_prompt } from "./tools/system/getSystem";
 
 // ---- OpenAI 客户端 ----
 const openai = new OpenAI({
@@ -50,7 +51,13 @@ const skills: SkillDef[] = [
 
 // 初始化技能注册表（必须在 load_skills 被调用之前执行）
 initSkills(skills);
-
+//当前最大token
+let MAX_TOKENS = 200;
+// ===== 常量配置（可根据需要调整） =====
+const ESCALATED_MAX_TOKENS = 64000; // 首次提升后的最大输出 token 数
+const MAX_RECOVERY_RETRIES = 3; // 最大续写重试次数
+let state = false; //是否扩展最大token
+let recovery_retries = 0; //续写重试次数
 /**
  * 主代理对话循环。
  *
@@ -66,17 +73,19 @@ async function agent_loop(
   messages: ChatCompletionMessageParam[],
 ): Promise<void> {
   while (true) {
+    const system_prompt = get_system_prompt();
     // 调用模型
     const res = await openai.chat.completions.create({
       model: "deepseek-v4-flash",
       messages: [
         {
           role: "system",
-          content: `你是一个专业的助手,你可以调用以下技能:\n${getSkillsPrompt()}`,
+          content: system_prompt,
         },
         ...messages,
       ],
       tools: filter_tools("main"),
+      max_tokens: MAX_TOKENS,
     });
 
     const choice = res.choices[0];
@@ -84,7 +93,7 @@ async function agent_loop(
 
     // 将模型回复添加到消息历史
     messages.push(choice.message as ChatCompletionMessageParam);
-    saveMessagesSnapshot(messages, "main:模型回复");
+    saveMessagesSnapshot(messages, "main:模型回复", system_prompt);
 
     const { finish_reason } = choice;
 
@@ -93,7 +102,35 @@ async function agent_loop(
 
     // 模型请求调用工具
     if (finish_reason === "tool_calls" && choice.message.tool_calls) {
-      await dispatchToolCall(choice.message.tool_calls, messages);
+      try {
+        await dispatchToolCall(choice.message.tool_calls, messages);
+      } catch (error) {
+        console.error("dispatchToolCall 意外错误:", error);
+      }
+    }
+    if (finish_reason === "length") {
+      //如果没有扩展token,那就扩展
+      if (!state) {
+        MAX_TOKENS = ESCALATED_MAX_TOKENS;
+        state = true;
+        continue;
+      }
+      //如果超过了64k仍然被截断了，那就先将内容添加到上下文中
+      messages.push({
+        role: "assistant",
+        content: choice.message.content || "",
+      });
+      //如果在扩展了token下还是被截断了，那就进行续写，前提是没有超过续写次数
+      if (recovery_retries < MAX_RECOVERY_RETRIES) {
+        messages.push({
+          role: "user",
+          content: "输出抵达上线了,请从中断的位置进行续写",
+        });
+        recovery_retries++;
+        continue;
+      }
+      console.log("模型输出超过最大token数，已截断");
+      return;
     }
   }
 }
@@ -124,7 +161,11 @@ async function main(): Promise<void> {
   while (true) {
     const userInput: string = await askQuestion("\n请输入问题: ");
     messages.push({ role: "user", content: userInput });
-    saveMessagesSnapshot(messages, "main:用户输入");
+    saveMessagesSnapshot(
+      messages,
+      "main:用户输入",
+      `你是一个专业的助手,你可以调用以下技能:\n${getSkillsPrompt()}`,
+    );
     await agent_loop(messages);
   }
 }

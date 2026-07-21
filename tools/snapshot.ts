@@ -11,10 +11,14 @@ import fs from "fs";
 export function saveMessagesSnapshot(
   messages: unknown[],
   label: string,
+  systemPrompt?: string,
 ): void {
+  const data = systemPrompt
+    ? [{ role: "system", content: systemPrompt }, ...JSON.parse(JSON.stringify(messages))]
+    : JSON.parse(JSON.stringify(messages));
   fs.writeFileSync(
     "message.json",
-    JSON.stringify(JSON.parse(JSON.stringify(messages)), null, 2),
+    JSON.stringify(data, null, 2),
     "utf-8",
   );
 }

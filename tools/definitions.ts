@@ -194,8 +194,252 @@ export const tools = [
         "当你需要查看所有已保存的记忆时，调用此工具。列出所有项目级记忆。无参数，返回每行一条 'key: value' 格式的文本列表。",
       parameters: {
         type: "object" as const,
-        // 无参数，但 OpenAI Function Calling 要求 parameters 字段存在，故保留空对象
         properties: {},
+      },
+    },
+  },
+
+  // ==================== 文件系统组 ====================
+
+  {
+    type: "function" as const,
+    function: {
+      name: "write_file",
+      description: "将内容写入文件。自动创建父目录。如果文件已存在则覆盖。",
+      parameters: {
+        type: "object" as const,
+        properties: {
+          path: { type: "string" as const, description: "文件路径" },
+          content: { type: "string" as const, description: "文件内容" },
+        },
+        required: ["path", "content"],
+      },
+    },
+  },
+  {
+    type: "function" as const,
+    function: {
+      name: "list_directory",
+      description: "列出目录内容，支持深度控制和模式过滤。",
+      parameters: {
+        type: "object" as const,
+        properties: {
+          path: { type: "string" as const, description: "目录路径" },
+          depth: { type: "number" as const, description: "递归深度，默认1，最大5", default: 1 },
+          pattern: { type: "string" as const, description: "可选的文件名过滤" },
+        },
+        required: ["path"],
+      },
+    },
+  },
+  {
+    type: "function" as const,
+    function: {
+      name: "search_files",
+      description: "使用 glob 模式搜索文件。例如 *.ts 搜索所有 TypeScript 文件。",
+      parameters: {
+        type: "object" as const,
+        properties: {
+          pattern: { type: "string" as const, description: "glob 搜索模式，如 **/*.ts" },
+          path: { type: "string" as const, description: "可选起始目录，默认工作空间根目录" },
+          max_results: { type: "number" as const, description: "最大结果数，默认50，最大500", default: 50 },
+        },
+        required: ["pattern"],
+      },
+    },
+  },
+  {
+    type: "function" as const,
+    function: {
+      name: "search_content",
+      description: "在文件中搜索匹配正则表达式的行。递归搜索所有文件。",
+      parameters: {
+        type: "object" as const,
+        properties: {
+          pattern: { type: "string" as const, description: "正则表达式" },
+          include: { type: "string" as const, description: "可选的文件后缀过滤，如 .ts" },
+          path: { type: "string" as const, description: "可选搜索目录，默认工作空间根目录" },
+          max_matches: { type: "number" as const, description: "最大匹配数，默认100，最大500", default: 100 },
+        },
+        required: ["pattern"],
+      },
+    },
+  },
+  {
+    type: "function" as const,
+    function: {
+      name: "delete_file",
+      description: "删除指定文件。不可恢复，请确认后再操作。",
+      parameters: {
+        type: "object" as const,
+        properties: {
+          path: { type: "string" as const, description: "要删除的文件路径" },
+        },
+        required: ["path"],
+      },
+    },
+  },
+  {
+    type: "function" as const,
+    function: {
+      name: "file_info",
+      description: "获取文件或目录的详细信息（大小、类型、修改时间、MIME等）。",
+      parameters: {
+        type: "object" as const,
+        properties: {
+          path: { type: "string" as const, description: "文件或目录路径" },
+        },
+        required: ["path"],
+      },
+    },
+  },
+
+  // ==================== 数据处理组 ====================
+
+  {
+    type: "function" as const,
+    function: {
+      name: "calculate",
+      description: "安全计算数学表达式，支持 + - * / % ^ ( )。",
+      parameters: {
+        type: "object" as const,
+        properties: {
+          expression: { type: "string" as const, description: "数学表达式，如 (1+2)*3" },
+        },
+        required: ["expression"],
+      },
+    },
+  },
+  {
+    type: "function" as const,
+    function: {
+      name: "encode_decode",
+      description: "编码或解码文本，支持 base64 / url / hex / unicode 格式。",
+      parameters: {
+        type: "object" as const,
+        properties: {
+          action: { type: "string" as const, enum: ["encode", "decode"], description: "编码或解码" },
+          format: { type: "string" as const, enum: ["base64", "url", "hex", "unicode"], description: "编码格式" },
+          text: { type: "string" as const, description: "待处理的文本" },
+        },
+        required: ["action", "format", "text"],
+      },
+    },
+  },
+  {
+    type: "function" as const,
+    function: {
+      name: "hash_string",
+      description: "计算字符串的哈希值，支持 md5、sha1、sha256。",
+      parameters: {
+        type: "object" as const,
+        properties: {
+          algorithm: { type: "string" as const, enum: ["md5", "sha1", "sha256"], description: "哈希算法" },
+          text: { type: "string" as const, description: "要哈希的文本" },
+        },
+        required: ["algorithm", "text"],
+      },
+    },
+  },
+  {
+    type: "function" as const,
+    function: {
+      name: "transform_data",
+      description: "在 JSON 和 CSV 之间互相转换数据格式。",
+      parameters: {
+        type: "object" as const,
+        properties: {
+          input: { type: "string" as const, description: "输入数据文本" },
+          from: { type: "string" as const, enum: ["json", "csv"], description: "输入格式" },
+          to: { type: "string" as const, enum: ["json", "csv"], description: "输出格式" },
+          delimiter: { type: "string" as const, description: "CSV 分隔符，默认逗号", default: "," },
+        },
+        required: ["input", "from", "to"],
+      },
+    },
+  },
+  {
+    type: "function" as const,
+    function: {
+      name: "generate_uuid",
+      description: "生成 UUID v4（随机）或 v7（时间戳排序），支持批量生成。",
+      parameters: {
+        type: "object" as const,
+        properties: {
+          version: { type: "string" as const, enum: ["v4", "v7"], description: "UUID 版本，默认 v4", default: "v4" },
+          count: { type: "number" as const, description: "生成数量，默认1，最大100", default: 1 },
+        },
+      },
+    },
+  },
+
+  // ==================== 网络组 ====================
+
+  {
+    type: "function" as const,
+    function: {
+      name: "fetch_url",
+      description: "发送 HTTP 请求获取网页内容或 API 响应。支持 GET/POST，可配超时和自定义头。",
+      parameters: {
+        type: "object" as const,
+        properties: {
+          url: { type: "string" as const, description: "请求 URL" },
+          method: { type: "string" as const, enum: ["GET", "POST"], description: "HTTP 方法，默认 GET", default: "GET" },
+          headers: { type: "object" as const, description: "可选的自定义请求头" },
+          body: { type: "string" as const, description: "POST 请求体" },
+          timeout: { type: "number" as const, description: "超时秒数，默认15，最大120", default: 15 },
+        },
+        required: ["url"],
+      },
+    },
+  },
+  {
+    type: "function" as const,
+    function: {
+      name: "web_search",
+      description: "搜索网络获取最新信息。需要配置 SEARCH_API_KEY 和 SEARCH_ENGINE_ID 环境变量。",
+      parameters: {
+        type: "object" as const,
+        properties: {
+          query: { type: "string" as const, description: "搜索关键词" },
+          count: { type: "number" as const, description: "返回结果数，默认5，最大20", default: 5 },
+        },
+        required: ["query"],
+      },
+    },
+  },
+
+  // ==================== 代码/调试组 ====================
+
+  {
+    type: "function" as const,
+    function: {
+      name: "execute_command",
+      description: "在终端执行白名单命令（node/npm/git/dir/pwd/echo/type/python等）。有超时保护和安全限制。",
+      parameters: {
+        type: "object" as const,
+        properties: {
+          command: { type: "string" as const, description: "要执行的命令" },
+          timeout: { type: "number" as const, description: "超时秒数，默认30，最大120", default: 30 },
+          cwd: { type: "string" as const, description: "可选工作目录" },
+        },
+        required: ["command"],
+      },
+    },
+  },
+  {
+    type: "function" as const,
+    function: {
+      name: "git_tools",
+      description: "执行 Git 操作：查看状态(status)、提交历史(log)、差异(diff)、分支列表(branch)。",
+      parameters: {
+        type: "object" as const,
+        properties: {
+          action: { type: "string" as const, enum: ["status", "log", "diff", "branch"], description: "Git 操作类型" },
+          path: { type: "string" as const, description: "可选仓库路径" },
+          limit: { type: "number" as const, description: "log 显示条数，默认10，最大100", default: 10 },
+        },
+        required: ["action"],
       },
     },
   },
@@ -211,6 +455,7 @@ export const subagent_tools_blacklist: readonly string[] = [
   "spawn_subagent",
   "load_skills",
   "ask_user",
+  "execute_command",
 ];
 
 /**

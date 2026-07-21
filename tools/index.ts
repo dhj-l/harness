@@ -18,6 +18,21 @@ export { spawn_subagent } from "./tool/sub_agent";
 export { summarize_subAgent } from "./tool/summarize_subAgent";
 export { ask_user } from "./tool/ask_user";
 export { write_memory, read_memory, list_memories } from "./tool/memory";
+export { write_file } from "./tool/write_file";
+export { list_directory } from "./tool/list_directory";
+export { search_files } from "./tool/search_files";
+export { search_content } from "./tool/search_content";
+export { delete_file } from "./tool/delete_file";
+export { file_info } from "./tool/file_info";
+export { calculate } from "./tool/calculate";
+export { encode_decode } from "./tool/encode_decode";
+export { hash_string } from "./tool/hash_string";
+export { transform_data } from "./tool/transform_data";
+export { generate_uuid } from "./tool/generate_uuid";
+export { fetch_url } from "./tool/fetch_url";
+export { web_search } from "./tool/web_search";
+export { execute_command } from "./tool/execute_command";
+export { git_tools } from "./tool/git_tools";
 export { saveMessagesSnapshot } from "./snapshot";
 
 // ---- 内部导入（仅供本模块调度使用，不对外暴露） ----
@@ -30,6 +45,21 @@ import { spawn_subagent } from "./tool/sub_agent";
 import { summarize_subAgent } from "./tool/summarize_subAgent";
 import { ask_user } from "./tool/ask_user";
 import { write_memory, read_memory, list_memories } from "./tool/memory";
+import { write_file } from "./tool/write_file";
+import { list_directory } from "./tool/list_directory";
+import { search_files } from "./tool/search_files";
+import { search_content } from "./tool/search_content";
+import { delete_file } from "./tool/delete_file";
+import { file_info } from "./tool/file_info";
+import { calculate } from "./tool/calculate";
+import { encode_decode } from "./tool/encode_decode";
+import { hash_string } from "./tool/hash_string";
+import { transform_data } from "./tool/transform_data";
+import { generate_uuid } from "./tool/generate_uuid";
+import { fetch_url } from "./tool/fetch_url";
+import { web_search } from "./tool/web_search";
+import { execute_command } from "./tool/execute_command";
+import { git_tools } from "./tool/git_tools";
 import type {
   ChatCompletionMessageParam,
   ChatCompletionMessageFunctionToolCall,
@@ -55,21 +85,44 @@ type ToolFn = (args: any) => any;
  */
 export const switchTools: Record<string, ToolFn> = {
   // ---- 基础工具 ----
-  get_weather,        // 查询天气
-  read_file,          // 读取文件内容
-  load_skills,        // 加载技能定义
+  get_weather,
+  read_file,
+  load_skills,
 
   // ---- 子代理相关 ----
-  spawn_subagent,     // 启动子代理处理复杂任务
-  summarize_subAgent, // 【子代理专用】返回最终答案的唯一出口
+  spawn_subagent,
+  summarize_subAgent,
 
   // ---- 交互工具 ----
-  ask_user,           // 向用户提问以获取更多信息
+  ask_user,
 
-  // ---- 记忆系统（项目级持久化存储） ----
-  write_memory,       // 写入键值对记忆到 memory.json
-  read_memory,        // 根据键名读取记忆
-  list_memories,      // 列出所有已保存的记忆
+  // ---- 记忆系统 ----
+  write_memory,
+  read_memory,
+  list_memories,
+
+  // ---- 文件系统组 ----
+  write_file,
+  list_directory,
+  search_files,
+  search_content,
+  delete_file,
+  file_info,
+
+  // ---- 数据处理组 ----
+  calculate,
+  encode_decode,
+  hash_string,
+  transform_data,
+  generate_uuid,
+
+  // ---- 网络组 ----
+  fetch_url,
+  web_search,
+
+  // ---- 代码/调试组 ----
+  execute_command,
+  git_tools,
 };
 
 /**
@@ -111,31 +164,56 @@ export async function dispatchToolCall(
   tool_calls: any[],
   messages: ChatCompletionMessageParam[],
 ): Promise<void> {
-  for (const tool of tool_calls) {
-    // 只处理 function 类型工具调用
-    if (tool.type !== "function") continue;
-    const fnTool = tool as ChatCompletionMessageFunctionToolCall;
+  const tasks = tool_calls
+    .filter((t: any) => t.type === "function")
+    .map(async (tool: any) => {
+      const fnTool = tool as ChatCompletionMessageFunctionToolCall;
+      const { name, arguments: args } = fnTool.function;
 
-    const { name, arguments: args } = fnTool.function;
+      const fn: ToolFn | undefined = switchTools[name];
+      if (!fn) {
+        return {
+          id: tool.id,
+          content: `工具 ${name} 不存在，请使用其他可用工具`,
+        };
+      }
 
-    // 查找对应的实现函数
-    const fn: ToolFn | undefined = switchTools[name];
-    if (!fn) throw new Error(`工具 ${name} 不存在`);
+      let argObj: Record<string, unknown>;
+      try {
+        argObj = JSON.parse(args);
+      } catch {
+        return {
+          id: tool.id,
+          content: `工具 ${name} 参数解析失败: ${args}`,
+        };
+      }
+      console.log(argObj);
 
-    // 解析参数并执行
-    const argObj: Record<string, unknown> = JSON.parse(args);
-    console.log(argObj);
+      let lastError: unknown;
+      for (let attempt = 1; attempt <= 3; attempt++) {
+        try {
+          const result = await fn(argObj);
+          console.log(result, "工具函数返回");
+          return { id: tool.id, content: result as string };
+        } catch (error) {
+          lastError = error;
+          console.log(`工具 ${name} 执行失败(第${attempt}次):`, error);
+          if (attempt < 3) await new Promise((r) => setTimeout(r, 1000));
+        }
+      }
+      return {
+        id: tool.id,
+        content: `工具 ${name} 调用失败。错误: ${lastError}`,
+      };
+    });
 
-    const result: unknown = await fn(argObj);
-    console.log(result, "工具函数返回");
-
-    // 将工具结果以 tool 角色消息追加到对话中
+  const results = await Promise.all(tasks);
+  for (const r of results) {
     messages.push({
       role: "tool",
-      content: result as string,
-      tool_call_id: tool.id,
+      content: r.content,
+      tool_call_id: r.id,
     } as ChatCompletionMessageParam);
-
-    saveMessagesSnapshot(messages, `main:工具结果:${name}`);
   }
+  saveMessagesSnapshot(messages, `main:工具批量结果`);
 }

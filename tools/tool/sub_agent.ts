@@ -22,9 +22,24 @@ import { tools, subagent_tools_blacklist, DEEP_NUM } from "../definitions";
 import { saveMessagesSnapshot } from "../snapshot";
 import { get_weather } from "./get_weather";
 import { read_file } from "./read_file";
+import { write_file } from "./write_file";
+import { list_directory } from "./list_directory";
+import { search_files } from "./search_files";
+import { search_content } from "./search_content";
+import { delete_file } from "./delete_file";
+import { file_info } from "./file_info";
 import { load_skills } from "./load_skills";
 import { summarize_subAgent } from "./summarize_subAgent";
 import { ask_user } from "./ask_user";
+import { write_memory, read_memory, list_memories } from "./memory";
+import { calculate } from "./calculate";
+import { encode_decode } from "./encode_decode";
+import { hash_string } from "./hash_string";
+import { transform_data } from "./transform_data";
+import { generate_uuid } from "./generate_uuid";
+import { fetch_url } from "./fetch_url";
+import { web_search } from "./web_search";
+import { git_tools } from "./git_tools";
 
 /**
  * 子代理可用的工具映射表。
@@ -33,9 +48,26 @@ import { ask_user } from "./ask_user";
 const switchTools: Record<string, (args: any) => any> = {
   get_weather,
   read_file,
+  write_file,
+  list_directory,
+  search_files,
+  search_content,
+  delete_file,
+  file_info,
   load_skills,
   summarize_subAgent,
   ask_user,
+  write_memory,
+  read_memory,
+  list_memories,
+  calculate,
+  encode_decode,
+  hash_string,
+  transform_data,
+  generate_uuid,
+  fetch_url,
+  web_search,
+  git_tools,
 };
 
 /**
@@ -60,7 +92,7 @@ function filter_tools(tools: readonly any[], role: string = "subagent"): any[] {
 /** DeepSeek API 客户端实例 */
 const openai = new OpenAI({
   baseURL: "https://api.deepseek.com",
-  apiKey: "sk-62b974098ae64b76b11a3cc3f7e59fd6",
+  apiKey: process.env.DEEPSEEK_API_KEY,
 });
 
 interface SpawnSubagentParams {
@@ -140,7 +172,12 @@ export async function spawn_subagent({
 
         console.log(args, fn, "子代理");
         const argObj = JSON.parse(args);
-        const result = await fn(argObj);
+        const result = await Promise.race([
+          fn(argObj),
+          new Promise<string>((_, reject) =>
+            setTimeout(() => reject(new Error("工具调用超时 (30s)")), 30000)
+          ),
+        ]);
 
         // 将工具调用结果注入消息列表
         messages.push({

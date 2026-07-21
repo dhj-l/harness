@@ -1,11 +1,26 @@
 import fs from "fs";
+import { resolveSafePath, getFileInfo } from "./safe_path";
 
-/**
- * 读取指定路径的文件内容（同步读取）
- * @param path - 文件路径（相对或绝对路径）
- * @returns 文件的文本内容
- */
-export function read_file({ path }: { path: string }): string {
-  const file_content: string = fs.readFileSync(path, "utf-8");
-  return file_content;
+const MAX_SIZE = 10 * 1024 * 1024;
+
+export function read_file({ path: input }: { path: string }): string {
+  try {
+    const resolved = resolveSafePath(input);
+    const info = getFileInfo(resolved);
+
+    if (!info.exists) return `文件不存在: ${input}`;
+    if (!info.isFile) return `路径不是文件: ${input}`;
+    if (info.size > MAX_SIZE) {
+      return `文件过大 (${(info.size / 1024 / 1024).toFixed(1)}MB)，当前限制 ${MAX_SIZE / 1024 / 1024}MB`;
+    }
+
+    const buffer = fs.readFileSync(resolved);
+    if (buffer.includes(0)) return `文件是二进制格式，无法以文本方式读取`;
+
+    return buffer.toString("utf-8");
+  } catch (err: any) {
+    if (err.code === "ENOENT") return `文件不存在: ${input}`;
+    if (err.code === "EACCES" || err.code === "EPERM") return `无权限读取: ${input}`;
+    return `读取失败: ${err.message}`;
+  }
 }
